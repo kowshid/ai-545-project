@@ -1,0 +1,65 @@
+# ============================================================
+# params.yml — Central configuration for the Insurance Predictor
+# Referenced by train.py, app.py, and tests
+# ============================================================
+
+data:
+  # Public mirror of the Kaggle "insurance.csv" dataset.
+  # (No Kaggle auth required so CI works out-of-the-box.)
+  url: "https://raw.githubusercontent.com/stedy/Machine-Learning-with-R-datasets/master/insurance.csv"
+  local_path: "data/insurance.csv"
+
+features:
+  age:
+    min: 18
+    max: 64
+    default: 30
+  bmi:
+    min: 15.0
+    max: 55.0
+    default: 27.5
+    step: 0.1
+  children:
+    min: 0
+    max: 5
+    default: 0
+  sex:
+    - female
+    - male
+  smoker:
+    - "no"
+    - "yes"
+  region:
+    - northeast
+    - northwest
+    - southeast
+    - southwest
+
+target: charges
+
+model:
+  type: RandomForestRegressor
+  params:
+    n_estimators: 300
+    max_depth: 10
+    min_samples_split: 4
+    min_samples_leaf: 2
+    random_state: 42
+    n_jobs: -1
+  test_size: 0.2
+  random_state: 42
+
+mlflow:
+  experiment_name: "insurance-charge-predictor"
+  tracking_uri: "./mlruns"
+  run_name: "rf_baseline"
+  registered_model_name: "InsuranceCharges"
+
+paths:
+  model: "models/model.pkl"
+  metrics: "models/metrics.json"
+
+app:
+  title: "Insurance Charge Predictor"
+  description: "A demo web application for exploring the insurance dataset and predicting estimated medical charges."
+  port: 8501

@@ -3,66 +3,114 @@ name: CI-CD
 on:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
   workflow_dispatch:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/insurance-app
+
 jobs:
-  test-and-train:
-    name: Test & train
+  # 1. Train + produce model.pkl and metrics.json (MLflow tracking)
+  train:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          cache: pip
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
-      - name: Run unit tests
-        run: pytest -q
-
-      - name: Train model
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11", cache: pip }
+      - run: pip install -r requirements.txt
+      - run: pytest -q
+      - name: Train (MLflow)
         run: python -m src.train
-
-      - name: Upload trained model
+      - name: Upload model + MLflow runs
         uses: actions/upload-artifact@v4
         with:
-          name: model-pkl
+          name: model-bundle
           path: |
             models/model.pkl
             models/metrics.json
-          retention-days: 14
+            mlruns/
 
-  deploy:
-    name: Deploy to Fly.io
-    needs: test-and-train
+  # 2. Register champion in dummy registry
+  register:
+    needs: train
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
-
-      - name: Download trained model
-        uses: actions/download-artifact@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11", cache: pip }
+      - run: pip install -r requirements.txt
+      - uses: actions/download-artifact@v4
+        with: { name: model-bundle }
+      - run: python -m src.register
+      - run: cat registry/champion.json
+      - uses: actions/upload-artifact@v4
         with:
-          name: model-pkl
-          path: models/
+          name: registry
+          path: registry/champion.json
 
-      - name: Install flyctl
-        uses: superfly/flyctl-actions/setup-flyctl@master
+  # 3. Build image with champion baked in, push to GHCR (for k8s)
+  build-image:
+    needs: register
+    runs-on: ubuntu-latest
+    permissions: { contents: read, packages: write }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: model-bundle }
+      - uses: actions/download-artifact@v4
+        with: { name: registry, path: registry }
+      - name: Lowercase image name
+        run: echo "IMAGE=${IMAGE_NAME,,}" >> "$GITHUB_ENV"
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:latest
+            ${{ env.IMAGE }}:${{ github.sha }}
 
-      - name: Deploy
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+  # 4. Deploy to Hugging Face Space (the public URL)
+  deploy-hf:
+    needs: build-image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          lfs: true                      # ← pull existing LFS objects
+
+      - name: Install & init Git LFS
         run: |
-          if [ -z "$FLY_API_TOKEN" ]; then
-            echo "::error::FLY_API_TOKEN is not set. Add it at Settings → Secrets and variables → Actions."
-            exit 1
-          fi
-          flyctl deploy --remote-only
+          git lfs install                # ← activate LFS filters
+
+      - uses: actions/download-artifact@v4
+        with: { name: model-bundle }
+      - uses: actions/download-artifact@v4
+        with: { name: registry, path: registry }
+
+      - name: Commit artifacts for HF
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          # .gitattributes in the repo already routes *.pkl through LFS,
+          # so this git add will store model.pkl as an LFS pointer.
+          git add -f .gitattributes \
+                    models/model.pkl \
+                    models/metrics.json \
+                    registry/champion.json
+          git commit -m "ci: bundle champion model [skip ci]" || echo "nothing to commit"
+
+      - name: Push to Hugging Face Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_USER:  ${{ secrets.HF_USER }}
+          HF_SPACE: insurance-charge-predictor
+        run: |
+          git remote add hf "https://${HF_USER}:${HF_TOKEN}@huggingface.co/spaces/${HF_USER}/${HF_SPACE}"
+          git push --force hf HEAD:main

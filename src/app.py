@@ -1,9 +1,9 @@
 """
-Streamlit front-end that matches the provided design.
+Streamlit front-end.
 
-Two modes:
-  - Model Mode: uses models/model.pkl if it exists
-  - Demo Mode: uses the formula-based fallback predictor
+Priority for predictions:
+  1. If registry/champion.json + models/model.pkl are present → use the model.
+  2. Else → fall back to the demo-mode formula.
 
 Run locally:
     streamlit run src/app.py
@@ -54,6 +54,15 @@ def cached_model():
     return load_model(PARAMS)
 
 
+@st.cache_data(show_spinner=False)
+def cached_champion() -> dict | None:
+    champ_file = project_root() / "registry" / "champion.json"
+    if not champ_file.exists():
+        return None
+    with open(champ_file, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
 # --------------------------------------------------------------------
 # Header
 # --------------------------------------------------------------------
@@ -65,10 +74,20 @@ st.markdown(
 )
 
 model = cached_model()
-if model is None:
-    st.info("No `model.pkl` found yet. The app is running in demo mode with a simulated predictor.")
-else:
+champ = cached_champion()
+
+if champ and model is not None:
+    st.success(
+        f"🏆 Champion model loaded · "
+        f"R²={champ['metrics']['r2']:.3f} · "
+        f"MAE=${champ['metrics']['mae']:,.0f} · "
+        f"RMSE=${champ['metrics']['rmse']:,.0f} · "
+        f"registered {champ['registered_at']}"
+    )
+elif model is not None:
     st.success(f"Loaded trained model from `{model_path(PARAMS).relative_to(project_root())}`.")
+else:
+    st.info("No `model.pkl` found yet. The app is running in demo mode with a simulated predictor.")
 
 
 # --------------------------------------------------------------------
@@ -199,7 +218,8 @@ with tab_predict:
         region = st.selectbox("Region", fcfg["region"], index=0)
 
     input_row = pd.DataFrame(
-        [{"age": age, "sex": sex, "bmi": bmi, "children": children, "smoker": smoker, "region": region}]
+        [{"age": age, "sex": sex, "bmi": bmi, "children": children,
+          "smoker": smoker, "region": region}]
     )
 
     st.subheader("Input Summary")
@@ -209,7 +229,8 @@ with tab_predict:
         if model is not None:
             try:
                 pred = float(model.predict(input_row)[0])
-                st.success(f"Predicted charge (model): **${pred:,.2f}**")
+                label = "champion" if champ else "model"
+                st.success(f"Predicted charge ({label}): **${pred:,.2f}**")
             except Exception as e:
                 st.error(f"Model prediction failed: {e}")
                 pred = demo_predict(input_row.iloc[0].to_dict())
@@ -221,6 +242,27 @@ with tab_predict:
 
 # -------- About Model --------
 with tab_about:
+    st.header("Model Registry")
+
+    if champ:
+        st.subheader("Current Champion")
+        cc1, cc2, cc3 = st.columns(3)
+        cc1.metric("R²", f"{champ['metrics']['r2']:.4f}")
+        cc2.metric("MAE", f"${champ['metrics']['mae']:,.0f}")
+        cc3.metric("RMSE", f"${champ['metrics']['rmse']:,.0f}")
+
+        st.caption(
+            f"Model type: `{champ['model_type']}` · "
+            f"Artifact: `{champ['model_path']}` · "
+            f"Registered: `{champ['registered_at']}` · "
+            f"Version: `{champ['version']}`"
+        )
+
+        with st.expander("Raw champion.json"):
+            st.json(champ)
+    else:
+        st.info("No champion registered yet. CI registers one on every push to `main`.")
+
     st.header("Model Integration Guide")
     st.write("This application is ready for a trained `.pkl` model.")
 
@@ -231,13 +273,8 @@ with tab_about:
     st.markdown(
         "- Train a scikit-learn pipeline\n"
         "- Include preprocessing inside the pipeline\n"
-        "- Save the full pipeline as `model.pkl`"
-    )
-
-    st.subheader("Why this is best")
-    st.markdown(
-        "- The app can directly accept raw inputs like `sex`, `smoker`, and `region`\n"
-        "- You do not need to manually encode features in the Streamlit app"
+        "- Save the full pipeline as `model.pkl`\n"
+        "- Run `python -m src.register` to promote it to champion"
     )
 
     st.code(
@@ -275,15 +312,3 @@ with open("models/model.pkl", "wb") as f:
 ''',
         language="python",
     )
-
-    metrics_file = project_root() / PARAMS["paths"]["metrics"]
-    if metrics_file.exists():
-        with open(metrics_file, "r", encoding="utf-8") as f:
-            metrics = json.load(f)
-        st.subheader("Last training metrics")
-        mcols = st.columns(len(metrics))
-        for (k, v), col in zip(metrics.items(), mcols):
-            col.metric(k.upper(), f"{v:,.3f}")
-    else:
-        if model is None:
-            st.warning("No model file is available yet. Add `models/model.pkl` to enable real predictions.")

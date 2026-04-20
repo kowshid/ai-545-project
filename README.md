@@ -440,3 +440,99 @@ git push origin main
 Dataset: [Medical Cost Personal Dataset — mirichoi0218 on Kaggle](https://www.kaggle.com/datasets/mirichoi0218/insurance)
 (redistributed via the `stedy/Machine-Learning-with-R-datasets` mirror for
 automated CI). The code in this repo is yours to use and extend.
+
+## 16. How the whole thing works
+
+## The pieces
+
+Five systems talk to each other. Everything else is noise.
+
+1. **Your laptop** — where you write code and run `git push`
+2. **GitHub** — stores code + runs the CI/CD workflow
+3. **GHCR / Fly builder** — builds the Docker image from your `Dockerfile`
+4. **Fly.io** — runs the container at a public URL
+5. **New Relic** — receives telemetry from the running container
+
+## The files that matter for production
+
+| File | Role |
+|---|---|
+| `src/train.py` | Produces `models/model.pkl` (a full sklearn pipeline) |
+| `src/app.py` | Streamlit app that loads `model.pkl` and serves predictions |
+| `params.yml` | Single source of truth for feature ranges and hyperparams |
+| `Dockerfile` | Defines the production image |
+| `scripts/entrypoint.sh` | Starts Streamlit, wrapped in the New Relic agent if the license key env var is present |
+| `fly.toml` | Tells Fly.io how to run the container |
+| `.github/workflows/ci-cd.yml` | The automation glue |
+
+Not in production path: `mlruns/`, `tests/`, `k8s/`, `Makefile`, `scripts/make.ps1`, README. Useful locally; irrelevant once the workflow runs.
+
+## The path a commit takes
+
+```
+git push
+   │
+   ▼
+GitHub Actions workflow triggers on push to main
+   │
+   ├── Job 1: test-and-train
+   │     • checkout
+   │     • pip install -r requirements.txt
+   │     • pytest
+   │     • python -m src.train   ← downloads CSV, fits pipeline, writes model.pkl
+   │     • upload model.pkl as an artifact
+   │
+   ▼
+   └── Job 2: deploy (needs Job 1)
+         • checkout
+         • download the model.pkl artifact into ./models/
+         • flyctl deploy --remote-only   ← uses FLY_API_TOKEN secret
+                │
+                ▼
+         Fly.io remote builder:
+            docker build -t <image> .         (reads Dockerfile)
+            COPY models/model.pkl is baked in
+            pushes image to Fly's registry
+                │
+                ▼
+         Fly.io rolling-restarts the machine(s)
+            container starts → entrypoint.sh runs
+                │
+                ├── if NEW_RELIC_LICENSE_KEY set:
+                │     newrelic-admin run-program streamlit run src/app.py
+                │        → agent phones home to New Relic every ~60s
+                │
+                └── else: streamlit run src/app.py
+```
+
+End result: the old version is replaced, a new release shows up in `flyctl releases`, and `https://insurance-charge-predictor.fly.dev` serves the new model.
+
+## Two things live outside Git
+
+Both are configured once and reused on every deploy:
+
+- **`FLY_API_TOKEN`** → GitHub repo → Settings → Secrets. Lets the workflow push to Fly.
+- **`NEW_RELIC_LICENSE_KEY`** → Fly.io secret (`flyctl secrets set ...`). Injected into the container as an env var at runtime; never touches Git.
+
+## What each piece of the container actually does at runtime
+
+1. Container starts → runs `/entrypoint.sh`.
+2. Entrypoint checks `NEW_RELIC_LICENSE_KEY`:
+   - present → `newrelic-admin run-program streamlit run src/app.py` (agent intercepts Python runtime, ships metrics/errors to New Relic)
+   - absent → plain `streamlit run src/app.py`
+3. Streamlit loads `models/model.pkl` on startup (or falls back to the demo formula if the pkl is missing).
+4. Fly's healthcheck hits `GET /_stcore/health` every 30s — a failing machine gets replaced.
+
+## The day-to-day loop
+
+```bash
+# edit code
+git commit -am "..."
+git push origin main
+
+# watch it
+gh run watch              # CI (test → train → deploy)
+flyctl releases           # confirm new version went live
+```
+
+That's the entire production story. Everything else (`make train`, `make docker-run`, minikube, MLflow UI, pytest) is local development scaffolding that never runs in production — it only exists so you can reproduce each CI step on your laptop before pushing.

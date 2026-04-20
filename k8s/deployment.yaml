@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: insurance-app-deployment
+  labels:
+    app: insurance-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: insurance-app
+  template:
+    metadata:
+      labels:
+        app: insurance-app
+    spec:
+      containers:
+        - name: insurance-app
+          image: insurance-app:v1
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8501
+          env:
+            - name: STREAMLIT_SERVER_PORT
+              value: "8501"
+            # Optional — populate from the Secret below for New Relic
+            - name: NEW_RELIC_LICENSE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: newrelic-secret
+                  key: e2e725105bbcc8467b74e9b6199daab23e9bNRAL
+                  optional: true
+            - name: NEW_RELIC_APP_NAME
+              value: "insurance-charge-predictor"
+          readinessProbe:
+            httpGet:
+              path: /_stcore/health
+              port: 8501
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /_stcore/health
+              port: 8501
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"

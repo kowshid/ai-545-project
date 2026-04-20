@@ -1,0 +1,136 @@
+# flyctl launch added from .gitignore
+# =========================
+# Editor / IDE
+# =========================
+**/.vscode
+**/.idea
+
+# =========================
+# OS files
+# =========================
+**/.DS_Store
+**/Thumbs.db
+
+# =========================
+# Python bytecode / compiled
+# =========================
+**/__pycache__
+**/*__pycache__
+**/*.py[cod]
+**/*.pyc
+**/*.pyo
+**/*.pyd
+**/*.so
+**/.Python
+
+# =========================
+# Build / distribution
+# =========================
+**/build
+**/dist
+**/develop-eggs
+**/downloads
+**/eggs
+**/.eggs
+**/lib
+**/lib64
+**/parts
+**/sdist
+**/var
+**/wheels
+**/*.egg-info
+**/.installed.cfg
+**/*.egg
+**/MANIFEST
+
+# =========================
+# Virtual environments
+# =========================
+**/venv
+**/.venv
+**/env
+**/ENV
+**/*/venv
+**/*/.venv
+**/*/env
+
+# =========================
+# Logs / runtime files
+# =========================
+**/*.log
+**/*test-results
+
+# =========================
+# Environment / secrets
+# =========================
+**/.env
+**/*.env
+backend/dnr/*.env
+**/*.pem
+**/*.key
+
+# =========================
+# Local development / services
+# =========================
+**/.localstack
+**/postgres_data
+
+# =========================
+# ML / experiment artifacts
+# =========================
+**/mlruns
+**/mlartifacts
+
+# =========================
+# Databases
+# =========================
+**/*.db
+**/db.sqlite3
+
+# =========================
+# Backend app specific
+# =========================
+backend/uploads
+backend/results
+backend/dnr
+
+# =========================
+# Testing / coverage (added)
+# =========================
+**/.tox
+**/.coverage
+**/.pytest_cache
+
+# =========================
+# Linters / formatters (added)
+# =========================
+**/.ruff_cache
+**/.mypy_cache
+
+# =========================
+# Jupyter / notebooks (added)
+# =========================
+**/.ipynb_checkpoints
+
+# =========================
+# Misc (added)
+# =========================
+**/*.swp
+**/*.swo
+
+# flyctl launch added from .idea/.gitignore
+# Default ignored files
+.idea/shelf
+.idea/workspace.xml
+# Ignored default folder with query files
+.idea/queries
+# Datasource local storage ignored files
+.idea/dataSources
+.idea/dataSources.local.xml
+# Editor-based HTTP Client requests
+.idea/httpRequests
+
+# flyctl launch added from .pytest_cache/.gitignore
+# Created by pytest automatically.
+.pytest_cache/**/*
+fly.toml

@@ -11,6 +11,7 @@ if [[ -n "${NEW_RELIC_LICENSE_KEY:-}" ]]; then
   export NEW_RELIC_CONFIG_FILE="${NEW_RELIC_CONFIG_FILE:-/app/newrelic.ini}"
   export NEW_RELIC_APP_NAME="${NEW_RELIC_APP_NAME:-insurance-charge-predictor}"
   export NEW_RELIC_LOG="${NEW_RELIC_LOG:-stderr}"
+  export NEW_RELIC_LOG_LEVEL="${NEW_RELIC_LOG_LEVEL:-info}"
   exec newrelic-admin run-program \
     streamlit run "$APP_PATH" \
       --server.port "$PORT" \

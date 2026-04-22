@@ -75,14 +75,14 @@ jobs:
             ${{ env.IMAGE }}:latest
             ${{ env.IMAGE }}:${{ github.sha }}
 
-  # 4. Deploy to Hugging Face Space (the public URL)
+  # 4. Configure HF Space secrets, then deploy
   deploy-hf:
     needs: build-image
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 1       # we only need the working tree, not history
+          fetch-depth: 1
           lfs: false
 
       - name: Install & init Git LFS
@@ -93,17 +93,50 @@ jobs:
       - uses: actions/download-artifact@v4
         with: { name: registry, path: registry }
 
+      - name: Sync HF Space secrets
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_USER:  ${{ secrets.HF_USER }}
+          HF_SPACE: insurance-charge-predictor
+          NR_KEY:   ${{ secrets.NEW_RELIC_LICENSE_KEY }}
+          NR_APP:   ${{ secrets.NEW_RELIC_APP_NAME }}
+        run: |
+          set -e
+          if [ -z "$NR_KEY" ]; then
+            echo "::warning::NEW_RELIC_LICENSE_KEY GitHub secret not set; skipping NR sync."
+            exit 0
+          fi
+
+          base="https://huggingface.co/api/spaces/${HF_USER}/${HF_SPACE}"
+          auth="Authorization: Bearer ${HF_TOKEN}"
+          ct="Content-Type: application/json"
+
+          echo "Setting NEW_RELIC_LICENSE_KEY (secret) on HF Space..."
+          curl -fsS -X POST "${base}/secrets" \
+            -H "$auth" -H "$ct" \
+            -d "{\"key\":\"NEW_RELIC_LICENSE_KEY\",\"value\":\"${NR_KEY}\",\"description\":\"New Relic ingest license key\"}" \
+            -o /dev/null
+
+          echo "Setting NEW_RELIC_APP_NAME (variable) on HF Space..."
+          curl -fsS -X POST "${base}/variables" \
+            -H "$auth" -H "$ct" \
+            -d "{\"key\":\"NEW_RELIC_APP_NAME\",\"value\":\"${NR_APP:-insurance-charge-predictor}\",\"description\":\"New Relic app name\"}" \
+            -o /dev/null
+
+          echo "HF Space secrets synced."
+
       - name: Build a clean single-commit branch for HF
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          # Orphan branch = no parent, no history
+          test -f models/model.pkl        || { echo "missing models/model.pkl";       exit 1; }
+          test -f models/metrics.json     || { echo "missing models/metrics.json";    exit 1; }
+          test -f registry/champion.json  || { echo "missing registry/champion.json"; exit 1; }
+
           git checkout --orphan hf-deploy
           git rm --cached -rf . >/dev/null 2>&1 || true
 
-          # Stage .gitattributes FIRST so the LFS filter is active
-          # before model.pkl gets added.
           git add .gitattributes
           git add -A
           git add -f models/model.pkl \

@@ -11,10 +11,11 @@ Run locally:
 from __future__ import annotations
 
 import json
+import os
 import sys
+import time
 from pathlib import Path
 
-# Make "src" importable when run via `streamlit run src/app.py`
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 import matplotlib.pyplot as plt
@@ -29,6 +30,34 @@ from src.utils import (
     model_path,
     project_root,
 )
+
+# --------------------------------------------------------------------
+# Optional New Relic instrumentation
+# --------------------------------------------------------------------
+NR_ENABLED = False
+try:
+    import newrelic.agent  # type: ignore
+    if os.environ.get("NEW_RELIC_LICENSE_KEY"):
+        cfg = os.environ.get("NEW_RELIC_CONFIG_FILE", "newrelic.ini")
+        if Path(cfg).exists():
+            try:
+                newrelic.agent.initialize(cfg)
+            except Exception:
+                pass
+        NR_ENABLED = True
+except ImportError:
+    pass
+
+
+def nr_event(name: str, payload: dict) -> None:
+    """Record a custom event in New Relic; no-op when NR isn't configured."""
+    if not NR_ENABLED:
+        return
+    try:
+        newrelic.agent.record_custom_event(name, payload)
+    except Exception:
+        pass
+
 
 # --------------------------------------------------------------------
 # Page config
@@ -88,6 +117,9 @@ elif model is not None:
     st.success(f"Loaded trained model from `{model_path(PARAMS).relative_to(project_root())}`.")
 else:
     st.info("No `model.pkl` found yet. The app is running in demo mode with a simulated predictor.")
+
+# Lightweight ping event so we can confirm telemetry is flowing on every page load
+nr_event("AppPageView", {"has_model": model is not None, "has_champion": champ is not None})
 
 
 # --------------------------------------------------------------------
@@ -152,24 +184,20 @@ with tab_dashboard:
         if viz_choice == "Age Histogram":
             ax.hist(df["age"], bins=15)
             ax.set_title("Age Distribution")
-            ax.set_xlabel("Age")
-            ax.set_ylabel("Count")
+            ax.set_xlabel("Age"); ax.set_ylabel("Count")
         elif viz_choice == "BMI Histogram":
             ax.hist(df["bmi"], bins=20)
             ax.set_title("BMI Distribution")
-            ax.set_xlabel("BMI")
-            ax.set_ylabel("Count")
+            ax.set_xlabel("BMI"); ax.set_ylabel("Count")
         elif viz_choice == "Charges Histogram":
             ax.hist(df["charges"], bins=25)
             ax.set_title("Charges Distribution")
-            ax.set_xlabel("Charges ($)")
-            ax.set_ylabel("Count")
+            ax.set_xlabel("Charges ($)"); ax.set_ylabel("Count")
         elif viz_choice == "Charges vs Age (scatter)":
             colors = df["smoker"].map({"yes": "tab:red", "no": "tab:blue"})
             ax.scatter(df["age"], df["charges"], c=colors, alpha=0.6, s=18)
             ax.set_title("Charges vs Age (red = smoker)")
-            ax.set_xlabel("Age")
-            ax.set_ylabel("Charges ($)")
+            ax.set_xlabel("Age"); ax.set_ylabel("Charges ($)")
         elif viz_choice == "Charges by Smoker (box)":
             data = [df.loc[df["smoker"] == s, "charges"] for s in smoker_options]
             ax.boxplot(data, labels=smoker_options)
@@ -226,18 +254,36 @@ with tab_predict:
     st.dataframe(input_row, use_container_width=True)
 
     if st.button("Predict Charges", use_container_width=True, type="primary"):
+        t0 = time.time()
+        prediction_mode = "demo"
+        pred = None
+
         if model is not None:
             try:
                 pred = float(model.predict(input_row)[0])
-                label = "champion" if champ else "model"
-                st.success(f"Predicted charge ({label}): **${pred:,.2f}**")
+                prediction_mode = "champion" if champ else "model"
+                st.success(f"Predicted charge ({prediction_mode}): **${pred:,.2f}**")
             except Exception as e:
                 st.error(f"Model prediction failed: {e}")
                 pred = demo_predict(input_row.iloc[0].to_dict())
+                prediction_mode = "demo_fallback"
                 st.warning(f"Fell back to demo prediction: **${pred:,.2f}**")
         else:
             pred = demo_predict(input_row.iloc[0].to_dict())
             st.success(f"Predicted charge (demo mode): **${pred:,.2f}**")
+
+        latency_ms = (time.time() - t0) * 1000.0
+        nr_event("InsurancePrediction", {
+            "age": int(age),
+            "bmi": float(bmi),
+            "children": int(children),
+            "sex": str(sex),
+            "smoker": str(smoker),
+            "region": str(region),
+            "predicted_charge": float(pred) if pred is not None else 0.0,
+            "mode": prediction_mode,
+            "latency_ms": latency_ms,
+        })
 
 
 # -------- About Model --------
@@ -262,6 +308,12 @@ with tab_about:
             st.json(champ)
     else:
         st.info("No champion registered yet. CI registers one on every push to `main`.")
+
+    st.header("Observability")
+    if NR_ENABLED:
+        st.success("New Relic agent is active. Custom events `InsurancePrediction` and `AppPageView` are being recorded.")
+    else:
+        st.info("New Relic is not configured. Set `NEW_RELIC_LICENSE_KEY` to enable telemetry.")
 
     st.header("Model Integration Guide")
     st.write("This application is ready for a trained `.pkl` model.")

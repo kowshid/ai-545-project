@@ -1,0 +1,59 @@
+schema: '2.0'
+stages:
+  train:
+    cmd: python -m src.train
+    deps:
+    - path: data/insurance.csv
+      hash: md5
+      md5: f86198943bbad63258a06f54f847265b
+      size: 54288
+    - path: params.yml
+      hash: md5
+      md5: 0044ad87ffaf8ce350dee0b090d193d3
+      size: 1433
+    - path: src/train.py
+      hash: md5
+      md5: 717bdc83c2f158107cdc5389826995c0
+      size: 5834
+    - path: src/utils.py
+      hash: md5
+      md5: 3811e71a15bc8080af5f9f40716dfac1
+      size: 3250
+    outs:
+    - path: models/candidates
+      hash: md5
+      md5: 540b8d77d5132f9b3c5bd81ef48fb888.dir
+      size: 6128045
+      nfiles: 3
+    - path: models/metrics.json
+      hash: md5
+      md5: 65f212c0e25f2350ae69d4c4e4f5b2f8
+      size: 129
+    - path: models/metrics_comparison.json
+      hash: md5
+      md5: b1c4c3cbc535bf23207cbee23d60e954
+      size: 997
+    - path: models/model.pkl
+      hash: md5
+      md5: 1e0112ec2f7226334056e58777d28fef
+      size: 5980212
+  register:
+    cmd: python -m src.register
+    deps:
+    - path: models/metrics_comparison.json
+      hash: md5
+      md5: b1c4c3cbc535bf23207cbee23d60e954
+      size: 997
+    - path: models/model.pkl
+      hash: md5
+      md5: 1e0112ec2f7226334056e58777d28fef
+      size: 5980212
+    - path: src/register.py
+      hash: md5
+      md5: 31a56b04bbe29a9182a673e926d28742
+      size: 1871
+    outs:
+    - path: registry/champion.json
+      hash: md5
+      md5: e6215c09978e799332186c3489f7857b
+      size: 448

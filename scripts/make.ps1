@@ -11,6 +11,7 @@
 #   .\scripts\make.ps1 install
 #   .\scripts\make.ps1 train
 #   .\scripts\make.ps1 app
+#   .\scripts\make.ps1 api
 #   .\scripts\make.ps1 docker-build
 #   .\scripts\make.ps1 docker-run
 #   .\scripts\make.ps1 k8s-start
@@ -39,6 +40,7 @@ $ErrorActionPreference = "Stop"
 $IMAGE = "insurance-app:v1"
 $APP   = "src/app.py"
 $PORT  = "8501"
+$API_PORT = "8000"
 
 # Helper: fail if a command is missing
 function Assert-Command($name) {
@@ -68,9 +70,12 @@ Common targets:
   venv              - create a Python 3.11 virtualenv in .venv
   install           - install dependencies into the venv (uses active venv if set)
   train             - train the model (logs to MLflow)
+  register          - promote best model to champion registry
+  dvc-repro         - run full DVC pipeline (prepare/train/register)
   mlflow-ui         - open the MLflow UI at http://127.0.0.1:5000
   test              - run pytest
   app               - run the Streamlit app locally
+  api               - run the FastAPI service locally
   docker-build      - build the Docker image ($IMAGE)
   docker-run        - run the container on port $PORT
   docker-stop       - stop the running container
@@ -112,6 +117,16 @@ function Invoke-Target($name) {
             & $py[0] $py[1..($py.Count-1)] -m src.train
         }
 
+        "register" {
+            $py = Get-Python
+            & $py[0] $py[1..($py.Count-1)] -m src.register
+        }
+
+        "dvc-repro" {
+            Assert-Command dvc
+            dvc repro
+        }
+
         "mlflow-ui" {
             Assert-Command mlflow
             mlflow ui --backend-store-uri ./mlruns --host 127.0.0.1 --port 5000
@@ -127,6 +142,11 @@ function Invoke-Target($name) {
             streamlit run $APP --server.port $PORT --server.address 0.0.0.0
         }
 
+        "api" {
+            Assert-Command uvicorn
+            uvicorn src.api:app --host 0.0.0.0 --port $API_PORT
+        }
+
         "docker-build" {
             Assert-Command docker
             docker build -t $IMAGE .
@@ -134,7 +154,7 @@ function Invoke-Target($name) {
 
         "docker-run" {
             Assert-Command docker
-            docker run --rm -p "$($PORT):8501" --name insurance-app $IMAGE
+            docker run --rm -p "$($API_PORT):8000" --name insurance-app $IMAGE
         }
 
         "docker-stop" {

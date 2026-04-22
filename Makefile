@@ -10,7 +10,7 @@ IMAGE  ?= insurance-app:v1
 APP    ?= src/app.py
 PORT   ?= 8501
 
-.PHONY: help venv install train test app mlflow-ui \
+.PHONY: help venv install train register dvc-repro test app api mlflow-ui \
         docker-build docker-run docker-stop \
         k8s-start k8s-load k8s-apply k8s-url k8s-scale k8s-rollout k8s-clean \
         fly-launch fly-deploy fly-status fly-logs fly-secrets clean
@@ -20,9 +20,12 @@ help:
 	@echo "  make venv            - create a Python 3.11 virtualenv in .venv"
 	@echo "  make install         - install dependencies into the venv"
 	@echo "  make train           - train the model (logs to MLflow)"
+	@echo "  make register        - promote best model to champion registry"
+	@echo "  make dvc-repro       - run full DVC pipeline (prepare/train/register)"
 	@echo "  make mlflow-ui       - open the MLflow UI at http://127.0.0.1:5000"
 	@echo "  make test            - run pytest"
 	@echo "  make app             - run the Streamlit app locally"
+	@echo "  make api             - run the FastAPI inference service locally"
 	@echo "  make docker-build    - build the Docker image"
 	@echo "  make docker-run      - run the container on port 8501"
 	@echo "  make k8s-start       - start minikube"
@@ -49,6 +52,12 @@ install:
 train:
 	$(PYTHON) -m src.train
 
+register:
+	$(PYTHON) -m src.register
+
+dvc-repro:
+	dvc repro
+
 mlflow-ui:
 	mlflow ui --backend-store-uri ./mlruns --host 127.0.0.1 --port 5000
 
@@ -58,13 +67,16 @@ test:
 app:
 	streamlit run $(APP) --server.port $(PORT) --server.address 0.0.0.0
 
+api:
+	uvicorn src.api:app --host 0.0.0.0 --port 8000
+
 # ---------------- Docker ----------------
 
 docker-build:
 	docker build -t $(IMAGE) .
 
 docker-run:
-	docker run --rm -p $(PORT):8501 --name insurance-app $(IMAGE)
+	docker run --rm -p 8000:8000 --name insurance-app $(IMAGE)
 
 docker-stop:
 	-docker stop insurance-app

@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
+from fastapi.testclient import TestClient
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.append(str(ROOT))
@@ -56,7 +57,8 @@ def test_full_training_pipeline(tmp_path, monkeypatch):
     assert {"age", "sex", "bmi", "children", "smoker", "region", "charges"}.issubset(df.columns)
     assert len(df) > 1000
 
-    pipeline = train_mod.build_pipeline(params["model"])
+    candidates = train_mod.build_candidates(params["model"]["random_state"])
+    pipeline = next(iter(candidates.values()))[0]
     X = df.drop(columns=["charges"])
     y = df["charges"]
     pipeline.fit(X, y)
@@ -64,3 +66,23 @@ def test_full_training_pipeline(tmp_path, monkeypatch):
     # In-sample R^2 should be high for a RF on this size of data
     from sklearn.metrics import r2_score
     assert r2_score(y, preds) > 0.85
+
+
+def test_api_health_and_predict():
+    from src.api import app
+
+    client = TestClient(app)
+    health = client.get("/health")
+    assert health.status_code == 200
+    assert health.json()["status"] == "ok"
+
+    payload = {
+        "age": 42,
+        "sex": "female",
+        "bmi": 26.4,
+        "children": 2,
+        "smoker": "no",
+        "region": "northeast",
+    }
+    response = client.post("/predict", json=payload)
+    assert response.status_code in (200, 503)

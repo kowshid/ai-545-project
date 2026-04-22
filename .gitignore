@@ -79,6 +79,12 @@ postgres_data/
 # =========================
 mlruns/
 mlartifacts/
+models/model.pkl
+models/candidates/
+models/metrics.json
+models/metrics_comparison.json
+data/insurance.csv
+.dvc/cache/
 
 # =========================
 # Databases

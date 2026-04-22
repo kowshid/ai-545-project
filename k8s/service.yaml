@@ -10,6 +10,6 @@ spec:
     app: insurance-app
   ports:
     - name: http
-      port: 8501
-      targetPort: 8501
-      nodePort: 30085
+      port: 8000
+      targetPort: 8000
+      nodePort: 30080

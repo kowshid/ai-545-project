@@ -6,59 +6,44 @@ on:
   workflow_dispatch:
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/insurance-app
 
 jobs:
-  # 1. Train + produce model.pkl and metrics.json (MLflow tracking)
-  train:
+  train-and-select:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.11", cache: pip }
       - run: pip install -r requirements.txt
-      - run: pytest -q
-      - name: Train (MLflow)
-        run: python -m src.train
-      - name: Upload model + MLflow runs
+      - name: Run tests
+        run: PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest -q
+      - name: Reproduce DVC pipeline
+        run: dvc repro
+      - name: Show leaderboard
+        run: python -c "import json; print(json.dumps(json.load(open('models/metrics_comparison.json')), indent=2))"
+      - name: Upload model bundle
         uses: actions/upload-artifact@v4
         with:
           name: model-bundle
           path: |
             models/model.pkl
             models/metrics.json
+            models/metrics_comparison.json
+            models/candidates/
+            data/insurance.csv
+            dvc.yaml
             mlruns/
+            registry/champion.json
 
-  # 2. Register champion in dummy registry
-  register:
-    needs: train
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: { python-version: "3.11", cache: pip }
-      - run: pip install -r requirements.txt
-      - uses: actions/download-artifact@v4
-        with: { name: model-bundle }
-      - run: python -m src.register
-      - run: cat registry/champion.json
-      - uses: actions/upload-artifact@v4
-        with:
-          name: registry
-          path: registry/champion.json
-
-  # 3. Build image with champion baked in, push to GHCR (for k8s)
   build-image:
-    needs: register
+    needs: train-and-select
     runs-on: ubuntu-latest
     permissions: { contents: read, packages: write }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with: { name: model-bundle }
-      - uses: actions/download-artifact@v4
-        with: { name: registry, path: registry }
       - name: Lowercase image name
         run: echo "IMAGE=${IMAGE_NAME,,}" >> "$GITHUB_ENV"
       - uses: docker/setup-buildx-action@v3
@@ -74,50 +59,3 @@ jobs:
           tags: |
             ${{ env.IMAGE }}:latest
             ${{ env.IMAGE }}:${{ github.sha }}
-
-  # 4. Deploy to Hugging Face Space (the public URL)
-  deploy-hf:
-    needs: build-image
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 1       # we only need the working tree, not history
-          lfs: false
-
-      - name: Install & init Git LFS
-        run: git lfs install
-
-      - uses: actions/download-artifact@v4
-        with: { name: model-bundle }
-      - uses: actions/download-artifact@v4
-        with: { name: registry, path: registry }
-
-      - name: Build a clean single-commit branch for HF
-        run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          # Orphan branch = no parent, no history
-          git checkout --orphan hf-deploy
-          git rm --cached -rf . >/dev/null 2>&1 || true
-
-          # Stage .gitattributes FIRST so the LFS filter is active
-          # before model.pkl gets added.
-          git add .gitattributes
-          git add -A
-          git add -f models/model.pkl \
-                    models/metrics.json \
-                    registry/champion.json
-
-          git commit -m "Deploy to Hugging Face Space"
-
-      - name: Push to Hugging Face Space
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          HF_USER:  ${{ secrets.HF_USER }}
-          HF_SPACE: insurance-charge-predictor
-        run: |
-          git push --force \
-            "https://${HF_USER}:${HF_TOKEN}@huggingface.co/spaces/${HF_USER}/${HF_SPACE}" \
-            hf-deploy:main

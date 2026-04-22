@@ -21,10 +21,10 @@ spec:
           image: ghcr.io/kowshid/insurance-app:latest
           imagePullPolicy: Always
           ports:
-            - containerPort: 8501
+            - containerPort: 8000
           env:
-            - name: STREAMLIT_SERVER_PORT
-              value: "8501"
+            - name: API_SERVER_PORT
+              value: "8000"
             - name: NEW_RELIC_APP_NAME
               value: "insurance-charge-predictor"
             # Optional — populated from the Secret below; pod starts fine without it
@@ -36,14 +36,14 @@ spec:
                   optional: true
           readinessProbe:
             httpGet:
-              path: /_stcore/health
-              port: 8501
+              path: /health
+              port: 8000
             initialDelaySeconds: 10
             periodSeconds: 10
           livenessProbe:
             httpGet:
-              path: /_stcore/health
-              port: 8501
+              path: /health
+              port: 8000
             initialDelaySeconds: 30
             periodSeconds: 20
           resources:

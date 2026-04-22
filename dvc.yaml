@@ -1,0 +1,22 @@
+stages:
+  train:
+    cmd: python -m src.train
+    deps:
+      - src/train.py
+      - src/utils.py
+      - params.yml
+      - data/insurance.csv
+    outs:
+      - models/model.pkl
+      - models/metrics.json
+      - models/metrics_comparison.json
+      - models/candidates
+
+  register:
+    cmd: python -m src.register
+    deps:
+      - src/register.py
+      - models/model.pkl
+      - models/metrics_comparison.json
+    outs:
+      - registry/champion.json

@@ -5,6 +5,9 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+env:
+  IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/insurance-app
+
 jobs:
   # 1. Train + produce model.pkl and metrics.json with MLflow tracking
   train:

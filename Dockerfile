@@ -1,6 +1,6 @@
 # ============================================================
 # Insurance Charge Predictor — Streamlit app container
-# Runs on Hugging Face Spaces (Docker SDK), Kubernetes, and locally
+# Runs on Hugging Face Spaces with Docker SDK, Kubernetes, and locally
 # ============================================================
 FROM python:3.11-slim
 
@@ -23,8 +23,7 @@ RUN pip install -r requirements.txt
 COPY params.yml .
 COPY src ./src
 
-# Trained artifact + champion metadata (both may be missing at build time;
-# the app falls back to demo mode if model.pkl is absent)
+# Trained artifact + champion metadata
 COPY models ./models
 COPY registry ./registry
 
@@ -44,7 +43,6 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
   CMD curl -fsS http://localhost:8501/_stcore/health || exit 1
 
 # Entrypoint auto-wraps Streamlit with the New Relic agent if
-# NEW_RELIC_LICENSE_KEY is set; otherwise starts Streamlit directly.
 COPY scripts/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 

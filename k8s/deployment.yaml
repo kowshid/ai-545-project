@@ -16,10 +16,9 @@ spec:
     spec:
       containers:
         - name: insurance-app
-          # Replace <your-github-user> once, or set up CI to sed this at apply time.
-          # Must be lowercase. Make the GHCR package public OR add an imagePullSecret.
-          image: ghcr.io/kowshid/insurance-app:latest
-          imagePullPolicy: Always
+          image: ghcr.io/kowshid/insurance-app:latest # for prod
+          #          image: insurance-app:v1 # for local
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8501
           env:
@@ -27,7 +26,6 @@ spec:
               value: "8501"
             - name: NEW_RELIC_APP_NAME
               value: "insurance-charge-predictor"
-            # Optional — populated from the Secret below; pod starts fine without it
             - name: NEW_RELIC_LICENSE_KEY
               valueFrom:
                 secretKeyRef:
@@ -53,6 +51,6 @@ spec:
             limits:
               cpu: "1000m"
               memory: "1Gi"
-      # Uncomment and create the secret if the GHCR package is private:
+      # Uncomment if the GHCR package is private:
       # imagePullSecrets:
       #   - name: ghcr-pull-secret

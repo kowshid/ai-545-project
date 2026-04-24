@@ -37,6 +37,7 @@ from src.utils import (
 NR_ENABLED = False
 try:
     import newrelic.agent  # type: ignore
+
     if os.environ.get("NEW_RELIC_LICENSE_KEY"):
         cfg = os.environ.get("NEW_RELIC_CONFIG_FILE", "newrelic.ini")
         if Path(cfg).exists():
@@ -121,7 +122,6 @@ else:
 # Lightweight ping event so we can confirm telemetry is flowing on every page load
 nr_event("AppPageView", {"has_model": model is not None, "has_champion": champ is not None})
 
-
 # --------------------------------------------------------------------
 # Sidebar — dataset filters
 # --------------------------------------------------------------------
@@ -140,14 +140,12 @@ df = df_full[
     df_full["sex"].isin(sex_sel)
     & df_full["smoker"].isin(smoker_sel)
     & df_full["region"].isin(region_sel)
-].reset_index(drop=True)
-
+    ].reset_index(drop=True)
 
 # --------------------------------------------------------------------
 # Tabs
 # --------------------------------------------------------------------
 tab_dashboard, tab_predict, tab_about = st.tabs(["Dashboard", "Predict Charges", "About Model"])
-
 
 # -------- Dashboard --------
 with tab_dashboard:
@@ -184,20 +182,24 @@ with tab_dashboard:
         if viz_choice == "Age Histogram":
             ax.hist(df["age"], bins=15)
             ax.set_title("Age Distribution")
-            ax.set_xlabel("Age"); ax.set_ylabel("Count")
+            ax.set_xlabel("Age");
+            ax.set_ylabel("Count")
         elif viz_choice == "BMI Histogram":
             ax.hist(df["bmi"], bins=20)
             ax.set_title("BMI Distribution")
-            ax.set_xlabel("BMI"); ax.set_ylabel("Count")
+            ax.set_xlabel("BMI");
+            ax.set_ylabel("Count")
         elif viz_choice == "Charges Histogram":
             ax.hist(df["charges"], bins=25)
             ax.set_title("Charges Distribution")
-            ax.set_xlabel("Charges ($)"); ax.set_ylabel("Count")
+            ax.set_xlabel("Charges ($)");
+            ax.set_ylabel("Count")
         elif viz_choice == "Charges vs Age (scatter)":
             colors = df["smoker"].map({"yes": "tab:red", "no": "tab:blue"})
             ax.scatter(df["age"], df["charges"], c=colors, alpha=0.6, s=18)
             ax.set_title("Charges vs Age (red = smoker)")
-            ax.set_xlabel("Age"); ax.set_ylabel("Charges ($)")
+            ax.set_xlabel("Age");
+            ax.set_ylabel("Charges ($)")
         elif viz_choice == "Charges by Smoker (box)":
             data = [df.loc[df["smoker"] == s, "charges"] for s in smoker_options]
             ax.boxplot(data, labels=smoker_options)
@@ -214,7 +216,6 @@ with tab_dashboard:
             .reset_index(name="avg_charges")
         )
         st.dataframe(grouped, use_container_width=True)
-
 
 # -------- Predict Charges --------
 with tab_predict:
@@ -285,7 +286,6 @@ with tab_predict:
             "latency_ms": latency_ms,
         })
 
-
 # -------- About Model --------
 with tab_about:
     st.header("Model Registry")
@@ -311,7 +311,8 @@ with tab_about:
 
     st.header("Observability")
     if NR_ENABLED:
-        st.success("New Relic agent is active. Custom events `InsurancePrediction` and `AppPageView` are being recorded.")
+        st.success(
+            "New Relic agent is active. Custom events `InsurancePrediction` and `AppPageView` are being recorded.")
     else:
         st.info("New Relic is not configured. Set `NEW_RELIC_LICENSE_KEY` to enable telemetry.")
 
@@ -320,47 +321,3 @@ with tab_about:
 
     st.subheader("Expected path")
     st.markdown("- `models/model.pkl`")
-
-    st.subheader("Recommended approach")
-    st.markdown(
-        "- Train a scikit-learn pipeline\n"
-        "- Include preprocessing inside the pipeline\n"
-        "- Save the full pipeline as `model.pkl`\n"
-        "- Run `python -m src.register` to promote it to champion"
-    )
-
-    st.code(
-        '''# Example training idea
-from sklearn.compose import ColumnTransformer
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import OneHotEncoder
-from sklearn.ensemble import RandomForestRegressor
-import pickle
-
-X = data.drop("charges", axis=1)
-y = data["charges"]
-
-cat_cols = ["sex", "smoker", "region"]
-num_cols = ["age", "bmi", "children"]
-
-preprocessor = ColumnTransformer(
-    transformers=[
-        ("cat", OneHotEncoder(handle_unknown="ignore"), cat_cols),
-        ("num", "passthrough", num_cols),
-    ]
-)
-
-pipeline = Pipeline(
-    steps=[
-        ("preprocessor", preprocessor),
-        ("model", RandomForestRegressor(random_state=42)),
-    ]
-)
-
-pipeline.fit(X, y)
-
-with open("models/model.pkl", "wb") as f:
-    pickle.dump(pipeline, f)
-''',
-        language="python",
-    )

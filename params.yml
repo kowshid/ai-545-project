@@ -1,11 +1,8 @@
-# ============================================================
-# params.yml — Central configuration for the Insurance Predictor
-# Referenced by train.py, app.py, and tests
-# ============================================================
+# ======================================================
+# params.yml — configuration for the Insurance Predictor
+# ======================================================
 
 data:
-  # Public mirror of the Kaggle "insurance.csv" dataset.
-  # (No Kaggle auth required so CI works out-of-the-box.)
   url: "https://raw.githubusercontent.com/stedy/Machine-Learning-with-R-datasets/master/insurance.csv"
   local_path: "data/insurance.csv"
 
@@ -37,22 +34,57 @@ features:
 
 target: charges
 
-model:
-  type: RandomForestRegressor
-  params:
-    n_estimators: 300
-    max_depth: 10
-    min_samples_split: 4
-    min_samples_leaf: 2
-    random_state: 42
-    n_jobs: -1
+# ---- Multi-model training ----
+# Each entry is one MLflow run. The challenger is the run with the best score on `selection_metric` 
+#  (higher is better for r2, lower is better for mae / rmse).
+training:
   test_size: 0.2
-  random_state: 42
+  random_state: 97
+  selection_metric: r2          # one of: r2, mae, rmse
+  candidates:
+    - name: rf_300_d10
+      type: RandomForestRegressor
+      params:
+        n_estimators: 300
+        max_depth: 10
+        min_samples_split: 4
+        min_samples_leaf: 2
+        random_state: 97
+        n_jobs: -1
+
+    - name: rf_500_d20
+      type: RandomForestRegressor
+      params:
+        n_estimators: 500
+        max_depth: 20
+        min_samples_split: 2
+        min_samples_leaf: 1
+        random_state: 97
+        n_jobs: -1
+
+    - name: gbr_200_lr005
+      type: GradientBoostingRegressor
+      params:
+        n_estimators: 200
+        learning_rate: 0.05
+        max_depth: 4
+        random_state: 97
+
+    - name: gbr_400_lr003
+      type: GradientBoostingRegressor
+      params:
+        n_estimators: 400
+        learning_rate: 0.03
+        max_depth: 3
+        random_state: 97
+
+    - name: linreg_baseline
+      type: LinearRegression
+      params: { }
 
 mlflow:
   experiment_name: "insurance-charge-predictor"
   tracking_uri: "./mlruns"
-  run_name: "rf_baseline"
   registered_model_name: "InsuranceCharges"
 
 paths:

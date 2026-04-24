@@ -2,15 +2,11 @@ name: CI-CD
 
 on:
   push:
-    branches: [main]
+    branches: [ main ]
   workflow_dispatch:
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/insurance-app
-
 jobs:
-  # 1. Train + produce model.pkl and metrics.json (MLflow tracking)
+  # 1. Train + produce model.pkl and metrics.json with MLflow tracking
   train:
     runs-on: ubuntu-latest
     steps:
@@ -48,7 +44,7 @@ jobs:
           name: registry
           path: registry/champion.json
 
-  # 3. Build image with champion baked in, push to GHCR (for k8s)
+  # 3. Build image with champion baked in, push to GHCR for k8s
   build-image:
     needs: register
     runs-on: ubuntu-latest
@@ -96,10 +92,10 @@ jobs:
       - name: Sync HF Space secrets
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          HF_USER:  ${{ secrets.HF_USER }}
+          HF_USER: ${{ secrets.HF_USER }}
           HF_SPACE: insurance-charge-predictor
-          NR_KEY:   ${{ secrets.NEW_RELIC_LICENSE_KEY }}
-          NR_APP:   ${{ secrets.NEW_RELIC_APP_NAME }}
+          NR_KEY: ${{ secrets.NEW_RELIC_LICENSE_KEY }}
+          NR_APP: ${{ secrets.NEW_RELIC_APP_NAME }}
         run: |
           set -e
           if [ -z "$NR_KEY" ]; then
@@ -148,7 +144,7 @@ jobs:
       - name: Push to Hugging Face Space
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          HF_USER:  ${{ secrets.HF_USER }}
+          HF_USER: ${{ secrets.HF_USER }}
           HF_SPACE: insurance-charge-predictor
         run: |
           git push --force \

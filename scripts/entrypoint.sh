@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# Entrypoint that starts Streamlit, optionally wrapped with
-# the New Relic Python agent if a license key is provided.
 set -euo pipefail
 
 APP_PATH="src/app.py"

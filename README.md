@@ -83,12 +83,12 @@ GitHub Actions (ci-cd.yml)
 
 ### Prerequisites
 
-| Tool | macOS | Windows |
-|---|---|---|
-| Python 3.11 | `brew install python@3.11` | [python.org](https://www.python.org/downloads/) |
-| Docker | Docker Desktop | Docker Desktop |
+| Tool               | macOS                           | Windows                                                 |
+|--------------------|---------------------------------|---------------------------------------------------------|
+| Python 3.11        | `brew install python@3.11`      | [python.org](https://www.python.org/downloads/)         |
+| Docker             | Docker Desktop                  | Docker Desktop                                          |
 | kubectl + minikube | `brew install kubectl minikube` | `winget install Kubernetes.kubectl Kubernetes.minikube` |
-| GitHub CLI | `brew install gh` | `winget install GitHub.cli` |
+| GitHub CLI         | `brew install gh`               | `winget install GitHub.cli`                             |
 
 ### Create the Hugging Face Space
 
@@ -194,8 +194,8 @@ the new model wins on R² — bakes it into the image and redeploys the HF Space
 1. Get an ingest license key from New Relic (40 chars, ends in `NRAL`).
 2. Add it to the HF Space as a secret:
    HF Space → **Settings → Variables and secrets → New secret**
-   - Name: `NEW_RELIC_LICENSE_KEY`
-   - Value: your key
+    - Name: `NEW_RELIC_LICENSE_KEY`
+    - Value: your key
 3. Restart the Space. `entrypoint.sh` detects the env var and starts
    Streamlit wrapped in `newrelic-admin run-program`.
 

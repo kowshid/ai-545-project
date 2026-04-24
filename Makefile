@@ -1,10 +1,10 @@
 # ============================================================
 # Makefile — Insurance Charge Predictor
-# Works on macOS (Apple Silicon) and Linux.
+# Works on macOS and Linux.
 # Windows users: run `.\scripts\make.ps1 <target>` in PowerShell
 # ============================================================
 
-PYTHON ?= python3
+PYTHON ?= python3.11
 PIP    ?= pip
 IMAGE  ?= insurance-app:v1
 APP    ?= src/app.py
@@ -49,6 +49,9 @@ install:
 train:
 	$(PYTHON) -m src.train
 
+register:
+	$(PYTHON) -m src.register
+
 mlflow-ui:
 	mlflow ui --backend-store-uri ./mlruns --host 127.0.0.1 --port 5000
 
@@ -72,6 +75,8 @@ docker-stop:
 # ---------------- Kubernetes (minikube) ----------------
 
 k8s-start:
+	docker system prune -a --volumes
+	minikube delete --all --purge
 	minikube start
 
 k8s-load:
@@ -97,26 +102,6 @@ k8s-rollout:
 k8s-clean:
 	-kubectl delete -f k8s/service.yaml
 	-kubectl delete -f k8s/deployment.yaml
-
-# ---------------- Fly.io (public free hosting) ----------------
-
-fly-launch:
-	flyctl launch --no-deploy --copy-config --name insurance-charge-predictor
-
-fly-deploy:
-	flyctl deploy
-
-fly-status:
-	flyctl status
-
-fly-logs:
-	flyctl logs
-
-fly-secrets:
-	@test -n "$(NR_KEY)" || (echo "Usage: make fly-secrets NR_KEY=xxxx" && exit 1)
-	flyctl secrets set NEW_RELIC_LICENSE_KEY=$(NR_KEY) NEW_RELIC_APP_NAME=insurance-charge-predictor
-
-# ---------------- Cleanup ----------------
 
 clean:
 	rm -rf __pycache__ .pytest_cache .mypy_cache

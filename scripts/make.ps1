@@ -183,34 +183,6 @@ function Invoke-Target($name) {
             kubectl delete -f k8s/deployment.yaml -ErrorAction SilentlyContinue
         }
 
-        "fly-launch" {
-            Assert-Command flyctl
-            flyctl launch --no-deploy --copy-config --name insurance-charge-predictor
-        }
-
-        "fly-deploy" {
-            Assert-Command flyctl
-            flyctl deploy
-        }
-
-        "fly-status" {
-            Assert-Command flyctl
-            flyctl status
-        }
-
-        "fly-logs" {
-            Assert-Command flyctl
-            flyctl logs
-        }
-
-        "fly-secrets" {
-            if ([string]::IsNullOrWhiteSpace($NrKey)) {
-                Write-Error "Usage: .\scripts\make.ps1 fly-secrets -NrKey <key>"
-            }
-            Assert-Command flyctl
-            flyctl secrets set NEW_RELIC_LICENSE_KEY=$NrKey NEW_RELIC_APP_NAME=insurance-charge-predictor
-        }
-
         "clean" {
             foreach ($p in @("__pycache__", ".pytest_cache", ".mypy_cache", "mlruns")) {
                 if (Test-Path $p) { Remove-Item -Recurse -Force $p }
